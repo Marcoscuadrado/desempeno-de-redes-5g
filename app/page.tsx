@@ -1,16 +1,98 @@
-import Image from "next/image";
+'use client';
+import { useEffect, useState } from 'react';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
+
+type SensorData = {
+  temperature: number;
+  humidity: number;
+  timestamp: Date;
+};
 
 export default function Home() {
+  const [data, setData] = useState<SensorData[]>([]);
+
+
+  useEffect(() => {
+    const socket = new WebSocket('wss://mqtt-ws-server.onrender.com');
+
+    socket.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (typeof payload.temperature === 'number' && typeof payload.humidity === 'number') {
+          const now = new Date();
+          const newEntry: SensorData = {
+            temperature: payload.temperature,
+            humidity: payload.humidity,
+            timestamp: now,
+          };
+
+          setData((prevData) => {
+            const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
+            const recentData = prevData.filter((d) => d.timestamp > tenMinutesAgo);
+            return [...recentData, newEntry];
+          });
+        }
+      } catch (err) {
+        console.error('Error parsing WebSocket message:', err);
+      }
+    };
+    socket.onopen = () => {
+    console.log("✅ Conectado al servidor WebSocket");
+  };
+
+  socket.onmessage = (event) => {
+    console.log("📡 Datos recibidos:", event.data);
+  };
+
+  socket.onerror = (error) => {
+    console.error("❌ Error de WebSocket:", error);
+  };
+
+    return () => socket.close();
+  }, []);
+  
+
+  const latest = data[data.length - 1];
+
+  const chartData = data.map((d) => ({
+    ...d,
+    time: d.timestamp.toLocaleTimeString(),
+  }));
+
   return (
     <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <h1 className="tex-5x1 tex-white font-bold">Evaluación del Desempeño de Redes 5G en Entornos Urbanos</h1>
-        <footer>
-        La tecnología 5G representa un avance significativo en el campo de las telecomunicaciones, proporcionando mayor velocidad, baja latencia y la capacidad de conectar simultáneamente miles de dispositivos. Sin embargo, su implementación enfrenta desafíos que pueden agravar la brecha digital entre áreas urbanas y rurales. En zonas urbanas, la alta densidad de infraestructura facilita una cobertura más estable y eficiente. Por el contrario, en entornos rurales con baja densidad de población, las redes suelen ser menos robustas debido a la escasez de estaciones base, lo que genera problemas de cobertura, mayor latencia y un rendimiento inconstante.
-        Este proyecto es relevante debido a que permitirá identificar las deficiencias en el despliegue de redes 5G en entornos rurales y proponer estrategias para su optimización. Al comparar los niveles de latencia, ancho de banda y cobertura en diferentes escenarios, se generarán datos útiles para empresas de telecomunicaciones y autoridades encargadas de dichas acciones. De esta forma, se podrán promover mejoras en infraestructura que garanticen una experiencia de usuario más accesible, fomentando la inclusión digital y el desarrollo tecnológico en áreas menos favorecidas
-        </footer>
+      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start w-full">
+        <h1 className="text-3xl text-white font-bold">
+          Evaluación del Desempeño de Redes 5G en Entornos Urbanos
+        </h1>
 
-        
+        <div className="text-xl text-white">
+          <p>🌡️ Temperatura: {latest ? `${latest.temperature.toFixed(2)} °C` : 'Cargando...'}</p>
+          <p>💧 Humedad: {latest ? `${latest.humidity.toFixed(2)} %` : 'Cargando...'}</p>
+        </div>
+
+        <div className="w-full h-80">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="time" />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Line type="monotone" dataKey="temperature" stroke="#ff7300" name="Temperatura (°C)" />
+              <Line type="monotone" dataKey="humidity" stroke="#387908" name="Humedad (%)" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
       </main>
     </div>
   );
