@@ -13,7 +13,8 @@ import {
 } from "recharts";
 
 type DataPoint = {
-  time: string;
+  timestamp: number;
+  timeLabel: string;
   temperature: number;
   humidity: number;
 };
@@ -23,7 +24,7 @@ export default function Home() {
   const socketRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    const socket = new WebSocket("wss://mqtt-ws-server.onrender.com"); // Asegúrate que esta URL sea la correcta de Render
+    const socket = new WebSocket("wss://mqtt-ws-server.onrender.com"); // Asegúrate que esta URL coincida con la de Render
     socketRef.current = socket;
 
     socket.onopen = () => {
@@ -31,29 +32,30 @@ export default function Home() {
     };
 
     socket.onmessage = (event) => {
-      const parsed = JSON.parse(event.data);
-      const now = new Date();
-      const newPoint: DataPoint = {
-        time: now.toLocaleTimeString(),
-        temperature: parsed.temperature,
-        humidity: parsed.humidity,
-      };
+      try {
+        const parsed = JSON.parse(event.data);
+        console.log("📦 Datos recibidos:", parsed);
 
-      setData((prev) => {
-        const updated = [...prev, newPoint];
-        // Filtrar datos para solo mostrar los últimos 10 minutos
-        const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
-        return updated.filter((point) => {
-          const [h, m, s] = point.time.split(":").map(Number);
-          const pointDate = new Date();
-          pointDate.setHours(h, m, s, 0);
-          return pointDate >= tenMinutesAgo;
+        const now = Date.now();
+        const nowLabel = new Date(now).toLocaleTimeString();
+
+        const newPoint: DataPoint = {
+          timestamp: now,
+          timeLabel: nowLabel,
+          temperature: Number(parsed.temperature),
+          humidity: Number(parsed.humidity),
+        };
+
+        setData((prev) => {
+          const tenMinutesAgo = now - 10 * 60 * 1000;
+          const filtered = [...prev, newPoint].filter(
+            (point) => point.timestamp >= tenMinutesAgo
+          );
+          return filtered;
         });
-      });
-    };
-
-    socket.onerror = (error) => {
-      console.error("❌ Error de WebSocket:", error);
+      } catch (e) {
+        console.error("❌ Error procesando mensaje:", e);
+      }
     };
 
     return () => {
@@ -62,21 +64,36 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="min-h-screen p-8 font-sans bg-gray-900 text-white">
-      <h1 className="text-2xl font-bold mb-8 text-center">
+    <div className="min-h-screen bg-gray-900 text-white p-8">
+      <h1 className="text-2xl font-bold text-center mb-6">
         Temperatura y Humedad (últimos 10 minutos)
       </h1>
-      <ResponsiveContainer width="100%" height={400}>
-        <LineChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="time" tick={{ fill: "white" }} />
-          <YAxis tick={{ fill: "white" }} />
-          <Tooltip />
-          <Legend />
-          <Line type="monotone" dataKey="temperature" stroke="#8884d8" name="Temperatura (°C)" />
-          <Line type="monotone" dataKey="humidity" stroke="#82ca9d" name="Humedad (%)" />
-        </LineChart>
-      </ResponsiveContainer>
+
+      <div className="border border-white p-4 bg-gray-800 rounded">
+        <ResponsiveContainer width="100%" height={400}>
+          <LineChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#555" />
+            <XAxis dataKey="timeLabel" stroke="#fff" />
+            <YAxis stroke="#fff" />
+            <Tooltip />
+            <Legend />
+            <Line
+              type="monotone"
+              dataKey="temperature"
+              stroke="#8884d8"
+              name="Temperatura (°C)"
+              dot={false}
+            />
+            <Line
+              type="monotone"
+              dataKey="humidity"
+              stroke="#82ca9d"
+              name="Humedad (%)"
+              dot={false}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }
