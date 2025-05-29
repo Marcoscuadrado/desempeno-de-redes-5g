@@ -1,60 +1,45 @@
-"use client";
+'use client';
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from 'react';
 import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer
-} from "recharts";
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
+} from 'recharts';
 
-type DataPoint = {
-  timestamp: number;
-  timeLabel: string;
+type SensorData = {
+  time: number;
   temperature: number;
   humidity: number;
 };
 
 export default function Home() {
-  const [data, setData] = useState<DataPoint[]>([]);
-  const socketRef = useRef<WebSocket | null>(null);
+  const [data, setData] = useState<SensorData[]>([]);
 
   useEffect(() => {
-    const socket = new WebSocket("wss://mqtt-ws-server.onrender.com"); // Asegúrate que esta URL coincida con la de Render
-    socketRef.current = socket;
-
-    socket.onopen = () => {
-      console.log("✅ WebSocket conectado");
-    };
+    const socket = new WebSocket('wss://mqtt-ws-server.onrender.com'); // Cambia por tu URL real
 
     socket.onmessage = (event) => {
       try {
         const parsed = JSON.parse(event.data);
-        console.log("📦 Datos recibidos:", parsed);
+        const temperature = parseFloat(parsed.temperature);
+        const humidity = parseFloat(parsed.humidity);
 
-        const now = Date.now();
-        const nowLabel = new Date(now).toLocaleTimeString();
+        if (!isNaN(temperature) && !isNaN(humidity)) {
+          const now = Date.now();
+          const newEntry: SensorData = {
+            time: now,
+            temperature,
+            humidity
+          };
 
-        const newPoint: DataPoint = {
-          timestamp: now,
-          timeLabel: nowLabel,
-          temperature: Number(parsed.temperature),
-          humidity: Number(parsed.humidity),
-        };
-
-        setData((prev) => {
-          const tenMinutesAgo = now - 10 * 60 * 1000;
-          const filtered = [...prev, newPoint].filter(
-            (point) => point.timestamp >= tenMinutesAgo
-          );
-          return filtered;
-        });
-      } catch (e) {
-        console.error("❌ Error procesando mensaje:", e);
+          setData(prev => {
+            const updated = [...prev, newEntry];
+            // Mantener solo los últimos 10 minutos de datos
+            const tenMinutesAgo = now - 10 * 60 * 1000;
+            return updated.filter(item => item.time >= tenMinutesAgo);
+          });
+        }
+      } catch (error) {
+        console.error("Error procesando mensaje WebSocket:", error);
       }
     };
 
@@ -64,36 +49,32 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-8">
-      <h1 className="text-2xl font-bold text-center mb-6">
-        Temperatura y Humedad (últimos 10 minutos)
-      </h1>
+    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)] bg-gray-900 text-white">
+      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start w-full">
+        <h1 className="text-5xl font-bold">
+          Evaluación del Desempeño de Redes 5G en Entornos Urbanos
+        </h1>
 
-      <div className="border border-white p-4 bg-gray-800 rounded">
-        <ResponsiveContainer width="100%" height={400}>
-          <LineChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#555" />
-            <XAxis dataKey="timeLabel" stroke="#fff" />
-            <YAxis stroke="#fff" />
-            <Tooltip />
-            <Legend />
-            <Line
-              type="monotone"
-              dataKey="temperature"
-              stroke="#8884d8"
-              name="Temperatura (°C)"
-              dot={false}
-            />
-            <Line
-              type="monotone"
-              dataKey="humidity"
-              stroke="#82ca9d"
-              name="Humedad (%)"
-              dot={false}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
+        <section className="w-full max-w-5xl bg-white text-black p-4 rounded-lg shadow-md">
+          <h2 className="text-2xl font-semibold mb-4">Temperatura y Humedad (últimos 10 minutos)</h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={data}>
+              <CartesianGrid stroke="#ccc" />
+              <XAxis
+                dataKey="time"
+                tickFormatter={(time) => new Date(time).toLocaleTimeString()}
+              />
+              <YAxis />
+              <Tooltip
+                labelFormatter={(time) => new Date(time).toLocaleTimeString()}
+              />
+              <Legend />
+              <Line type="monotone" dataKey="temperature" stroke="#8884d8" name="Temperatura (°C)" />
+              <Line type="monotone" dataKey="humidity" stroke="#82ca9d" name="Humedad (%)" />
+            </LineChart>
+          </ResponsiveContainer>
+        </section>
+      </main>
     </div>
   );
 }
